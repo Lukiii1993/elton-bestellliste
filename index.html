@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Elton GmbH – Bestellliste</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#D9291F" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Bestellliste" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  ::placeholder { color: #A6A69C; }
+  @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+  .spin { animation: spin 0.9s linear infinite; }
+  input:focus, select:focus, button:focus-visible {
+    outline: 2px solid #1A1A18;
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ---------- Icons (einfache Inline-SVGs, ersetzen lucide-react) ---------- */
+function Icon({ children, size = 18, color = "currentColor", strokeWidth = 2, style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      {children}
+    </svg>
+  );
+}
+const CameraIcon = (p) => <Icon {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Icon>;
+const PlusIcon = (p) => <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>;
+const Trash2Icon = (p) => <Icon {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></Icon>;
+const CheckIcon = (p) => <Icon {...p}><path d="M20 6 9 17l-5-5"/></Icon>;
+const XIcon = (p) => <Icon {...p}><path d="M18 6 6 18M6 6l12 12"/></Icon>;
+const Loader2Icon = (p) => <Icon {...p}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
+const PackageIcon = (p) => <Icon {...p}><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></Icon>;
+const ClipboardListIcon = (p) => <Icon {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h6M9 8h1"/></Icon>;
+const Edit3Icon = (p) => <Icon {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></Icon>;
+const SearchIcon = (p) => <Icon {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Icon>;
+const DownloadIcon = (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></Icon>;
+const AlertTriangleIcon = (p) => <Icon {...p}><path d="m21.7 18-8-14.3a2 2 0 0 0-3.4 0L2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4M12 17h.01"/></Icon>;
+const CheckSquareIcon = (p) => <Icon {...p}><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></Icon>;
+const SquareIcon = (p) => <Icon {...p}><rect x="3" y="3" width="18" height="18" rx="2"/></Icon>;
+const SettingsIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>;
+const SmartphoneIcon = (p) => <Icon {...p}><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></Icon>;
+const ShareIcon = (p) => <Icon {...p}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4M12 2v13"/></Icon>;
+
+/* ---------- Helpers ---------- */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function hashBase64(base64) {
+  const enc = new TextEncoder().encode(base64);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const FOTOCACHE_KEY = "elton-bestellliste-fotocache";
+
+function ladeFotoCache() {
+  try { return JSON.parse(localStorage.getItem(FOTOCACHE_KEY) || "{}"); } catch (e) { return {}; }
+}
+function speichereFotoCache(cache) {
+  try {
+    const eintraege = Object.entries(cache);
+    // Cache auf die letzten 200 Fotos begrenzen, damit der Speicher nicht ausufert
+    const begrenzt = Object.fromEntries(eintraege.slice(-200));
+    localStorage.setItem(FOTOCACHE_KEY, JSON.stringify(begrenzt));
+  } catch (e) {}
+}
+
+async function identifyMaterial(base64, mediaType, apiKey) {
+  const hash = await hashBase64(base64);
+  const cache = ladeFotoCache();
+  if (cache[hash]) {
+    return { ...cache[hash], ausCache: true };
+  }
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+          {
+            type: "text",
+            text:
+              "Das ist ein Foto von Werkzeug oder Verbrauchsmaterial aus einem Handwerksbetrieb (z.B. Schraube, Bohrer, Dübel, Kleber). " +
+              "Gib NUR ein JSON-Objekt zurück, ohne Markdown-Backticks, ohne weiteren Text: " +
+              '{"name": "kurzer Materialname inkl. vermuteter Größe/Norm falls erkennbar, z.B. \'Sechskantschraube M6\'", "kategorie": "grobe Kategorie, z.B. Schrauben, Werkzeug, Dübel, Kleber, Sonstiges"} ' +
+              "Wenn du das Objekt nicht erkennen kannst, setze name auf '' und kategorie auf 'Sonstiges'.",
+          },
+        ],
+      }],
+    }),
+  });
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error("API-Fehler " + response.status + ": " + errText.slice(0, 200));
+  }
+  const data = await response.json();
+  const text = (data.content || []).map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+  const cleaned = text.replace(/```json|```/g, "").trim();
+  let ergebnis;
+  try { ergebnis = JSON.parse(cleaned); } catch (e) { ergebnis = { name: "", kategorie: "Sonstiges" }; }
+
+  if (ergebnis.name) {
+    cache[hash] = ergebnis;
+    speichereFotoCache(cache);
+  }
+  return ergebnis;
+}
+
+/* localStorage-Wrapper (Fallback, solange keine Firebase-Konfiguration hinterlegt ist) */
+const storage = {
+  get: async (key) => {
+    const v = localStorage.getItem(key);
+    return v === null ? null : { key, value: v };
+  },
+  set: async (key, value) => {
+    try { localStorage.setItem(key, value); return { key, value }; }
+    catch (e) { return null; }
+  },
+};
+
+/* ---------- Firestore: geräteübergreifender Live-Abgleich ---------- */
+const FIREBASE_CONFIG_KEY = "elton-bestellliste-firebase-config";
+let firestoreDb = null;
+
+function initFirestore(configStr) {
+  try {
+    const config = JSON.parse(configStr);
+    if (!config.projectId) return null;
+    const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(config);
+    firestoreDb = firebase.firestore(app);
+    return firestoreDb;
+  } catch (e) {
+    return null;
+  }
+}
+
+function subscribeFirestoreDoc(db, docName, onData) {
+  return db.collection("elton-bestellliste").doc(docName).onSnapshot(
+    (snap) => onData(snap.exists ? snap.data().payload : null),
+    () => onData(null)
+  );
+}
+
+async function setFirestoreDoc(db, docName, value) {
+  try {
+    await db.collection("elton-bestellliste").doc(docName).set({ payload: value, aktualisiert: Date.now() });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+const ITEMS_KEY = "elton-bestellliste-items";
+const MATERIALS_KEY = "elton-bestellliste-materialstamm";
+const APIKEY_KEY = "elton-bestellliste-apikey";
+
+const KATEGORIEN = ["Schrauben", "Werkzeug", "Kleber", "Kabelbinder", "Kabel", "Verbrauchsmaterial", "Sonstiges"];
+const EINHEITEN = ["Stück", "Gebinde"];
+
+const emptyDraft = () => ({
+  name: "", kategorie: "Sonstiges", artikelnummer: "", lieferant: "",
+  bestand: "", bestandEinheit: "Stück", gebindeGroesse: "",
+  mindestbestand: "", mindestbestandEinheit: "Stück",
+  menge: 1, mengeEinheit: "Stück",
+});
+
+/* ---------- App-Installations-Hinweis ---------- */
+function InstallBanner() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [installed, setInstalled] = useState(
+    window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true
+  );
+  const [showIosHint, setShowIosHint] = useState(false);
+  const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => setInstalled(true));
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  if (installed) return null;
+
+  const install = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+    } else if (isIos) {
+      setShowIosHint((s) => !s);
+    }
+  };
+
+  if (!deferredPrompt && !isIos) return null;
+
+  return (
+    <div style={styles.installBanner}>
+      <button onClick={install} style={styles.installButton}>
+        <SmartphoneIcon size={15} /> App installieren
+      </button>
+      {showIosHint && (
+        <p style={styles.installHint}>
+          <ShareIcon size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />
+          Teilen-Symbol antippen → „Zum Home-Bildschirm"
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Einstellungen: API-Key + Firebase-Konfiguration ---------- */
+function SettingsPanel({ apiKey, firebaseConfigStr, firestoreVerbunden, onSave, onClose }) {
+  const [keyValue, setKeyValue] = useState(apiKey || "");
+  const [configValue, setConfigValue] = useState(firebaseConfigStr || "");
+  const [configFehler, setConfigFehler] = useState("");
+
+  const handleSave = () => {
+    if (configValue.trim()) {
+      try { JSON.parse(configValue.trim()); }
+      catch (e) { setConfigFehler("Das ist kein gültiges JSON – bitte das komplette firebaseConfig-Objekt einfügen."); return; }
+    }
+    setConfigFehler("");
+    onSave(keyValue.trim(), configValue.trim());
+  };
+
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <h2 style={styles.modalTitle}>Einstellungen</h2>
+
+        <p style={styles.modalText}>
+          <strong>Gemeinsame Liste (alle Geräte):</strong> Firebase-Konfiguration einfügen
+          (aus der Firebase-Konsole kopiert, siehe ANLEITUNG.md). Status aktuell:{" "}
+          <strong style={{ color: firestoreVerbunden ? "#2E9AD1" : "#D9291F" }}>
+            {firestoreVerbunden ? "verbunden – Liste wird geräteübergreifend synchronisiert" : "nicht verbunden – nur lokal auf diesem Gerät"}
+          </strong>
+        </p>
+        <textarea
+          style={{ ...styles.textInput, minHeight: 90, fontFamily: "monospace", fontSize: 12 }}
+          placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}'
+          value={configValue}
+          onChange={(e) => setConfigValue(e.target.value)}
+        />
+        {configFehler && <p style={styles.apiErrorText}>{configFehler}</p>}
+
+        <p style={{ ...styles.modalText, marginTop: 6 }}>
+          <strong>Foto-Erkennung (optional):</strong> eigener Anthropic-API-Key (console.anthropic.com),
+          wird nur auf diesem Gerät gespeichert.
+        </p>
+        <input
+          style={styles.textInput}
+          type="password"
+          placeholder="sk-ant-..."
+          value={keyValue}
+          onChange={(e) => setKeyValue(e.target.value)}
+        />
+
+        <div style={styles.captureActions}>
+          <button style={styles.ghostButton} onClick={onClose}><XIcon size={16} /> Abbrechen</button>
+          <button style={styles.primaryButton} onClick={handleSave}><CheckIcon size={16} /> Speichern</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Hauptkomponente ---------- */
+function Bestellliste() {
+  const [items, setItems] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [firebaseConfigStr, setFirebaseConfigStr] = useState("");
+  const [firestoreVerbunden, setFirestoreVerbunden] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiError, setApiError] = useState("");
+
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [mindestbestandGesperrt, setMindestbestandGesperrt] = useState(false);
+  const [gebindeGroesseGesperrt, setGebindeGroesseGesperrt] = useState(false);
+  const [filter, setFilter] = useState("offen");
+  const [suchtext, setSuchtext] = useState("");
+  const [auswahlModus, setAuswahlModus] = useState(false);
+  const [ausgewaehlt, setAusgewaehlt] = useState(new Set());
+  const [bestandKategorie, setBestandKategorie] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // API-Key und Firebase-Konfiguration laden (immer lokal, da nötig um Firestore überhaupt zu erreichen)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res3 = await storage.get(APIKEY_KEY);
+        if (res3 && res3.value) setApiKey(res3.value);
+      } catch (e) {}
+      try {
+        const res4 = await storage.get(FIREBASE_CONFIG_KEY);
+        if (res4 && res4.value) setFirebaseConfigStr(res4.value);
+      } catch (e) {}
+      setLoaded(true);
+    })();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  }, []);
+
+  // Items & Materialstamm laden/live-abgleichen: über Firestore, sobald konfiguriert, sonst lokal
+  useEffect(() => {
+    let unsubItems = null;
+    let unsubMaterials = null;
+
+    if (firebaseConfigStr) {
+      const db = initFirestore(firebaseConfigStr);
+      if (db) {
+        setFirestoreVerbunden(true);
+        unsubItems = subscribeFirestoreDoc(db, "items", (payload) => { if (payload) setItems(payload); });
+        unsubMaterials = subscribeFirestoreDoc(db, "materialstamm", (payload) => { if (payload) setMaterials(payload); });
+        return () => { if (unsubItems) unsubItems(); if (unsubMaterials) unsubMaterials(); };
+      }
+      setFirestoreVerbunden(false);
+    }
+
+    // Fallback: lokal (nur dieses Gerät)
+    (async () => {
+      try {
+        const res = await storage.get(ITEMS_KEY);
+        if (res && res.value) setItems(JSON.parse(res.value));
+      } catch (e) {}
+      try {
+        const res2 = await storage.get(MATERIALS_KEY);
+        if (res2 && res2.value) setMaterials(JSON.parse(res2.value));
+      } catch (e) {}
+    })();
+  }, [firebaseConfigStr]);
+
+  const persistItems = useCallback(async (next) => {
+    if (firestoreVerbunden && firestoreDb) {
+      const ok = await setFirestoreDoc(firestoreDb, "items", next);
+      setSaveError(!ok);
+    } else {
+      const ok = await storage.set(ITEMS_KEY, JSON.stringify(next));
+      setSaveError(!ok);
+    }
+  }, [firestoreVerbunden]);
+  const persistMaterials = useCallback(async (next) => {
+    if (firestoreVerbunden && firestoreDb) { await setFirestoreDoc(firestoreDb, "materialstamm", next); }
+    else { await storage.set(MATERIALS_KEY, JSON.stringify(next)); }
+  }, [firestoreVerbunden]);
+
+  const updateItems = useCallback((updater) => {
+    setItems((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      persistItems(next);
+      return next;
+    });
+  }, [persistItems]);
+
+  const rememberMaterial = useCallback((name, kategorie) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setMaterials((prev) => {
+      if (prev.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) return prev;
+      const next = [...prev, { id: uid(), name: trimmed, kategorie: kategorie || "Sonstiges" }];
+      persistMaterials(next);
+      return next;
+    });
+  }, [persistMaterials]);
+
+  const normName = (name) => (name || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+  const findMindestbestandFuerName = useCallback((name) => {
+    const trimmed = normName(name);
+    if (!trimmed) return null;
+    const treffer = items.find((it) => normName(it.name) === trimmed && it.mindestbestand !== "" && it.mindestbestand !== undefined);
+    if (!treffer) return null;
+    return { mindestbestand: treffer.mindestbestand, mindestbestandEinheit: treffer.mindestbestandEinheit || "Stück" };
+  }, [items]);
+
+  const findGebindeGroesseFuerName = useCallback((name) => {
+    const trimmed = normName(name);
+    if (!trimmed) return null;
+    const treffer = items.find((it) => normName(it.name) === trimmed && it.gebindeGroesse !== "" && it.gebindeGroesse !== undefined);
+    return treffer ? treffer.gebindeGroesse : null;
+  }, [items]);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setPhotoUrl(previewUrl);
+    setMindestbestandGesperrt(false);
+    setGebindeGroesseGesperrt(false);
+    setApiError("");
+    setDraft(emptyDraft());
+
+    if (!apiKey) {
+      setShowSettings(true);
+      return;
+    }
+    setAnalyzing(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const result = await identifyMaterial(base64, file.type || "image/jpeg", apiKey);
+      setDraft((d) => ({ ...d, name: result.name || "", kategorie: result.kategorie || "Sonstiges" }));
+      if (result.ausCache) setApiError("Bereits bekanntes Foto erkannt – ohne erneute Kosten.");
+    } catch (err) {
+      setApiError("Erkennung fehlgeschlagen – bitte Name manuell eintragen.");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const openManualAdd = () => {
+    setPhotoUrl(null); setEditingId(null);
+    setMindestbestandGesperrt(false); setGebindeGroesseGesperrt(false);
+    setDraft(emptyDraft());
+  };
+
+  const openEdit = (item) => {
+    setPhotoUrl(item.foto || null);
+    setEditingId(item.id);
+    setMindestbestandGesperrt(item.mindestbestand !== "" && item.mindestbestand !== undefined);
+    setGebindeGroesseGesperrt(item.gebindeGroesse !== "" && item.gebindeGroesse !== undefined);
+    setDraft({
+      name: item.name, kategorie: item.kategorie,
+      artikelnummer: item.artikelnummer || "", lieferant: item.lieferant || "",
+      bestand: item.bestand ?? "", bestandEinheit: item.bestandEinheit || "Stück",
+      gebindeGroesse: item.gebindeGroesse ?? "",
+      mindestbestand: item.mindestbestand ?? "", mindestbestandEinheit: item.mindestbestandEinheit || "Stück",
+      menge: item.menge, mengeEinheit: item.mengeEinheit || "Stück",
+    });
+  };
+
+  const cancelDraft = () => {
+    if (photoUrl && !editingId) URL.revokeObjectURL(photoUrl);
+    setPhotoUrl(null); setDraft(null); setEditingId(null); setAnalyzing(false); setApiError("");
+  };
+
+  const confirmDraft = () => {
+    if (!draft || !draft.name.trim()) return;
+    const menge = Math.max(1, Number(draft.menge) || 1);
+    const bestand = draft.bestand === "" ? "" : Math.max(0, Number(draft.bestand) || 0);
+
+    const vorhandeneGebindeGroesse = !editingId ? findGebindeGroesseFuerName(draft.name) : null;
+    const gebindeGroesse = vorhandeneGebindeGroesse ? vorhandeneGebindeGroesse
+      : draft.gebindeGroesse !== "" ? Math.max(1, Number(draft.gebindeGroesse) || 1) : "";
+
+    const vorhandenesMindestbestand = !editingId ? findMindestbestandFuerName(draft.name) : null;
+    const mindestbestand = vorhandenesMindestbestand ? vorhandenesMindestbestand.mindestbestand
+      : draft.mindestbestand === "" ? "" : Math.max(0, Number(draft.mindestbestand) || 0);
+    const mindestbestandEinheit = vorhandenesMindestbestand ? vorhandenesMindestbestand.mindestbestandEinheit
+      : draft.mindestbestandEinheit || "Stück";
+
+    if (editingId) {
+      updateItems((prev) => prev.map((it) => it.id === editingId ? {
+        ...it, name: draft.name.trim(), kategorie: draft.kategorie || "Sonstiges",
+        artikelnummer: draft.artikelnummer.trim(), lieferant: draft.lieferant.trim(),
+        bestand, bestandEinheit: draft.bestandEinheit || "Stück", gebindeGroesse,
+        mindestbestand, mindestbestandEinheit, menge, mengeEinheit: draft.mengeEinheit || "Stück",
+      } : it));
+    } else {
+      const newItem = {
+        id: uid(), name: draft.name.trim(), kategorie: draft.kategorie || "Sonstiges",
+        artikelnummer: draft.artikelnummer.trim(), lieferant: draft.lieferant.trim(),
+        bestand, bestandEinheit: draft.bestandEinheit || "Stück", gebindeGroesse,
+        mindestbestand, mindestbestandEinheit, menge, mengeEinheit: draft.mengeEinheit || "Stück",
+        status: "offen", erstellt: Date.now(), foto: photoUrl || null,
+      };
+      updateItems((prev) => [newItem, ...prev]);
+    }
+    rememberMaterial(draft.name, draft.kategorie);
+    setPhotoUrl(null); setDraft(null); setEditingId(null);
+  };
+
+  const toggleStatus = (id) => {
+    updateItems((prev) => prev.map((it) => it.id === id ? { ...it, status: it.status === "offen" ? "bestellt" : "offen" } : it));
+  };
+  const removeItem = (id) => { updateItems((prev) => prev.filter((it) => it.id !== id)); };
+
+  const visibleItems = items
+    .filter((it) => {
+      if (filter === "bestand") {
+        const hatBestand = it.bestand !== "" && it.bestand !== undefined && it.bestand !== null;
+        if (!hatBestand) return false;
+        if (bestandKategorie === null) return false;
+        return it.kategorie === bestandKategorie;
+      }
+      return it.status === filter;
+    })
+    .filter((it) => (suchtext.trim() ? it.name.toLowerCase().includes(suchtext.trim().toLowerCase()) : true));
+
+  const offenCount = items.filter((it) => it.status === "offen").length;
+  const materialNames = useMemo(() => materials.map((m) => m.name), [materials]);
+  const bestandKategorienVorhanden = useMemo(() =>
+    KATEGORIEN.filter((k) => items.some((it) => it.kategorie === k && it.bestand !== "" && it.bestand !== undefined && it.bestand !== null)),
+    [items]);
+  const bestandCountFuer = (k) => items.filter((it) => it.kategorie === k && it.bestand !== "" && it.bestand !== undefined && it.bestand !== null).length;
+
+  const nameHatBereitsMindestbestand = draft && !editingId ? findMindestbestandFuerName(draft.name) !== null : false;
+  const nameHatBereitsGebindeGroesse = draft && !editingId ? findGebindeGroesseFuerName(draft.name) !== null : false;
+
+  const toggleAuswahl = (id) => {
+    setAusgewaehlt((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+  const markiereAusgewaehlteAlsBestellt = () => {
+    updateItems((prev) => prev.map((it) => ausgewaehlt.has(it.id) ? { ...it, status: "bestellt" } : it));
+    setAusgewaehlt(new Set()); setAuswahlModus(false);
+  };
+
+  const doExport = () => {
+    const zeilen = visibleItems.map((it) => {
+      let zeile = it.name;
+      if (filter === "bestand") {
+        zeile += ` – Bestand: ${it.bestand ?? "-"} ${it.bestandEinheit || "Stück"}`;
+        if (it.bestandEinheit === "Gebinde" && it.gebindeGroesse) zeile += ` (je ${it.gebindeGroesse} Stk)`;
+        if (it.mindestbestand !== "" && it.mindestbestand !== undefined) zeile += `, Mindestbestand: ${it.mindestbestand} ${it.mindestbestandEinheit || "Stück"}`;
+      } else {
+        zeile += ` – Menge: ${it.menge} ${it.mengeEinheit || "Stück"}`;
+        if (it.mengeEinheit === "Gebinde" && it.gebindeGroesse) zeile += ` (je ${it.gebindeGroesse} Stk)`;
+      }
+      if (it.artikelnummer) zeile += `, Art-Nr. ${it.artikelnummer}`;
+      if (it.lieferant) zeile += `, Lieferant: ${it.lieferant}`;
+      return zeile;
+    });
+    const text = `ELTON GMBH – ${filter === "bestand" ? "Bestand" : filter === "offen" ? "Offene Bestellungen" : "Liste"}\n\n${zeilen.join("\n")}`;
+    try {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `elton-${filter}-${new Date().toISOString().slice(0, 10)}.txt`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {}
+  };
+
+  const saveSettings = async (key, configStr) => {
+    setApiKey(key);
+    await storage.set(APIKEY_KEY, key);
+    setFirebaseConfigStr(configStr); // löst useEffect aus, das Firestore neu verbindet
+    await storage.set(FIREBASE_CONFIG_KEY, configStr);
+    setShowSettings(false);
+  };
+
+  const renderItem = (it) => {
+    const nachbestellenNoetig = it.mindestbestand !== "" && it.mindestbestand !== undefined &&
+      it.bestand !== "" && it.bestand !== undefined && Number(it.bestand) <= Number(it.mindestbestand);
+    return (
+      <li key={it.id} style={styles.itemCard}>
+        <div style={styles.itemMain}>
+          {auswahlModus && filter === "offen" ? (
+            <button onClick={() => toggleAuswahl(it.id)} aria-label="Auswählen" style={styles.selectBox}>
+              {ausgewaehlt.has(it.id) ? <CheckSquareIcon size={20} color={BLUE} /> : <SquareIcon size={20} color="#B5B2A6" />}
+            </button>
+          ) : (
+            filter !== "bestand" && (
+              <button onClick={() => toggleStatus(it.id)} aria-label="Status ändern"
+                style={{ ...styles.checkCircle, ...(it.status === "bestellt" ? styles.checkCircleDone : {}) }}>
+                {it.status === "bestellt" && <CheckIcon size={14} color="#ffffff" strokeWidth={3} />}
+              </button>
+            )
+          )}
+          <div style={styles.itemBody}>
+            <div style={styles.itemNameRow}>
+              <div style={{ ...styles.itemName, ...(filter !== "bestand" && it.status === "bestellt" ? styles.strikethrough : {}) }}>{it.name}</div>
+              {nachbestellenNoetig && <span style={styles.nachbestellenBadge}><AlertTriangleIcon size={11} /> Nachbestellen</span>}
+            </div>
+            <div style={styles.itemMeta}>
+              <span style={styles.tagChip}>{it.kategorie}</span>
+              {it.artikelnummer && <><span style={styles.metaSep}>·</span><span>Art-Nr. {it.artikelnummer}</span></>}
+              {it.lieferant && <><span style={styles.metaSep}>·</span><span>{it.lieferant}</span></>}
+              {filter === "bestand" && it.bestand !== "" && it.bestand !== undefined && (
+                <><span style={styles.metaSep}>·</span><span>Bestand {it.bestand} {it.bestandEinheit || "Stück"}{it.bestandEinheit === "Gebinde" && it.gebindeGroesse ? ` (je ${it.gebindeGroesse} Stk)` : ""}</span></>
+              )}
+              {filter === "bestand" && it.mindestbestand !== "" && it.mindestbestand !== undefined && (
+                <><span style={styles.metaSep}>·</span><span>Mindest {it.mindestbestand} {it.mindestbestandEinheit || "Stück"}{it.mindestbestandEinheit === "Gebinde" && it.gebindeGroesse ? ` (je ${it.gebindeGroesse} Stk)` : ""}</span></>
+              )}
+              {filter !== "bestand" && (
+                <><span style={styles.metaSep}>·</span><span>Menge {it.menge} {it.mengeEinheit || "Stück"}{it.mengeEinheit === "Gebinde" && it.gebindeGroesse ? ` (je ${it.gebindeGroesse} Stk)` : ""}</span></>
+              )}
+            </div>
+          </div>
+          {it.foto && <img src={it.foto} alt="" style={styles.itemThumb} />}
+          <button onClick={() => openEdit(it)} style={styles.editButton} aria-label="Bearbeiten"><Edit3Icon size={16} /></button>
+          <button onClick={() => removeItem(it.id)} style={styles.deleteButton} aria-label="Löschen"><Trash2Icon size={16} /></button>
+        </div>
+      </li>
+    );
+  };
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.hazardStrip} />
+      <header style={styles.header}>
+        <div style={styles.headerRow}>
+          <div style={styles.logoBlock}>
+            <PackageIcon size={26} color="#ffffff" strokeWidth={2.2} />
+            <div>
+              <h1 style={styles.title}>ELTON GMBH</h1>
+              <p style={styles.subtitle}>Materialbestand · Bestellungen</p>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => setShowSettings(true)} style={styles.settingsButton} aria-label="Einstellungen">
+              <SettingsIcon size={18} color="#fff" />
+              <span style={{ ...styles.syncDot, background: firestoreVerbunden ? "#4ADE80" : "#F0B429" }} />
+            </button>
+            <div style={styles.countBadge}>
+              <span style={styles.countNumber}>{offenCount}</span>
+              <span style={styles.countLabel}>offen</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main style={styles.main}>
+        <InstallBanner />
+
+        {!draft ? (
+          <div style={styles.addButtonRow}>
+            <button style={styles.captureButton} onClick={() => fileInputRef.current && fileInputRef.current.click()}>
+              <CameraIcon size={20} strokeWidth={2.2} /> Foto aufnehmen
+            </button>
+            <button style={styles.manualButton} onClick={openManualAdd}>
+              <PlusIcon size={20} strokeWidth={2.2} /> Manuell
+            </button>
+          </div>
+        ) : (
+          <div style={styles.captureCard}>
+            <div style={styles.captureCardInner}>
+              {photoUrl && <img src={photoUrl} alt="Material" style={styles.photoPreview} />}
+              <div style={styles.captureFields}>
+                {analyzing ? (
+                  <div style={styles.analyzingRow}><Loader2Icon size={18} className="spin" style={styles.spinIcon} /><span>Material wird erkannt …</span></div>
+                ) : (
+                  <>
+                    {apiError && <p style={{ ...styles.apiErrorText, color: apiError.includes("ohne erneute Kosten") ? BLUE : RED }}>{apiError}</p>}
+                    <label style={styles.fieldLabel}>Materialname</label>
+                    <input style={styles.textInput} list="materialstamm-liste" value={draft.name}
+                      onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z.B. Sechskantschraube M6" />
+                    <datalist id="materialstamm-liste">{materialNames.map((n) => <option key={n} value={n} />)}</datalist>
+
+                    <label style={styles.fieldLabel}>Kategorie</label>
+                    <select style={styles.textInput} value={draft.kategorie} onChange={(e) => setDraft((d) => ({ ...d, kategorie: e.target.value }))}>
+                      {KATEGORIEN.map((k) => <option key={k} value={k}>{k}</option>)}
+                    </select>
+
+                    <div style={styles.fieldRow}>
+                      <div style={{ flex: 1 }}>
+                        <label style={styles.fieldLabel}>Artikelnummer</label>
+                        <input style={styles.textInput} value={draft.artikelnummer} onChange={(e) => setDraft((d) => ({ ...d, artikelnummer: e.target.value }))} placeholder="optional" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={styles.fieldLabel}>Lieferant</label>
+                        <input style={styles.textInput} value={draft.lieferant} onChange={(e) => setDraft((d) => ({ ...d, lieferant: e.target.value }))} placeholder="optional" />
+                      </div>
+                    </div>
+
+                    <div style={styles.fieldRow}>
+                      <div style={{ flex: 1 }}>
+                        <label style={styles.fieldLabel}>{draft.bestandEinheit === "Gebinde" ? "Bestand (Anzahl Gebinde)" : "Bestand"}</label>
+                        <input type="number" min="0" style={styles.textInput} value={draft.bestand}
+                          onChange={(e) => setDraft((d) => ({ ...d, bestand: e.target.value }))}
+                          placeholder={draft.bestandEinheit === "Gebinde" ? "Anzahl Gebinde" : "aktuell im Lager"} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={styles.fieldLabel}>Einheit</label>
+                        <select style={styles.textInput} value={draft.bestandEinheit} onChange={(e) => setDraft((d) => ({ ...d, bestandEinheit: e.target.value }))}>
+                          {EINHEITEN.map((e) => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                      </div>
+                      {draft.bestandEinheit === "Gebinde" && !gebindeGroesseGesperrt && !nameHatBereitsGebindeGroesse && (
+                        <div style={{ flex: 1 }}>
+                          <label style={styles.fieldLabel}>Stk je Gebinde</label>
+                          <input type="number" min="1" style={styles.textInput} value={draft.gebindeGroesse}
+                            onChange={(e) => setDraft((d) => ({ ...d, gebindeGroesse: e.target.value }))} placeholder="z.B. 100" />
+                        </div>
+                      )}
+                    </div>
+
+                    {!mindestbestandGesperrt && !nameHatBereitsMindestbestand && (
+                      <div style={styles.fieldRow}>
+                        <div style={{ flex: 1 }}>
+                          <label style={styles.fieldLabel}>Mindestbestand (optional)</label>
+                          <input type="number" min="0" style={styles.textInput} value={draft.mindestbestand}
+                            onChange={(e) => setDraft((d) => ({ ...d, mindestbestand: e.target.value }))} placeholder="ab wann nachbestellen" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={styles.fieldLabel}>Einheit</label>
+                          <select style={styles.textInput} value={draft.mindestbestandEinheit} onChange={(e) => setDraft((d) => ({ ...d, mindestbestandEinheit: e.target.value }))}>
+                            {EINHEITEN.map((e) => <option key={e} value={e}>{e}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={styles.fieldRow}>
+                      <div style={{ flex: 1 }}>
+                        <label style={styles.fieldLabel}>{draft.mengeEinheit === "Gebinde" ? "Menge zu bestellen (Anzahl Gebinde)" : "Menge zu bestellen"}</label>
+                        <input type="number" min="1" style={styles.textInput} value={draft.menge}
+                          onChange={(e) => setDraft((d) => ({ ...d, menge: e.target.value }))}
+                          placeholder={draft.mengeEinheit === "Gebinde" ? "Anzahl Gebinde" : ""} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={styles.fieldLabel}>Einheit</label>
+                        <select style={styles.textInput} value={draft.mengeEinheit} onChange={(e) => setDraft((d) => ({ ...d, mengeEinheit: e.target.value }))}>
+                          {EINHEITEN.map((e) => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={styles.captureActions}>
+                      <button style={styles.ghostButton} onClick={cancelDraft}><XIcon size={16} /> Verwerfen</button>
+                      <button style={styles.primaryButton} onClick={confirmDraft}><PlusIcon size={16} /> {editingId ? "Speichern" : "Zur Liste"}</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{ display: "none" }} />
+
+        <div style={styles.filterRow}>
+          {[{ key: "offen", label: "Offene Bestellungen" }, { key: "bestellt", label: "Bestellt" }, { key: "bestand", label: "Bestand" }].map((f) => (
+            <button key={f.key} onClick={() => { setFilter(f.key); if (f.key === "bestand") setBestandKategorie(null); setAuswahlModus(false); setAusgewaehlt(new Set()); }}
+              style={{ ...styles.filterButton, ...(filter === f.key ? styles.filterButtonActive : {}) }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={styles.searchRow}>
+          <div style={styles.searchBox}>
+            <SearchIcon size={15} color="#9A9A90" />
+            <input style={styles.searchInput} value={suchtext} onChange={(e) => setSuchtext(e.target.value)} placeholder="Material suchen …" />
+          </div>
+          <button onClick={doExport} style={styles.exportButton} aria-label="Liste exportieren"><DownloadIcon size={16} /></button>
+        </div>
+
+        {filter === "offen" && (
+          <div style={styles.bulkRow}>
+            <button onClick={() => { setAuswahlModus((m) => !m); setAusgewaehlt(new Set()); }} style={styles.bulkToggleButton}>
+              {auswahlModus ? "Abbrechen" : "Mehrere auswählen"}
+            </button>
+            {auswahlModus && ausgewaehlt.size > 0 && (
+              <button onClick={markiereAusgewaehlteAlsBestellt} style={styles.bulkConfirmButton}><CheckIcon size={14} /> {ausgewaehlt.size} als bestellt markieren</button>
+            )}
+          </div>
+        )}
+
+        {filter === "bestand" && bestandKategorie === null && (
+          bestandKategorienVorhanden.length === 0 ? (
+            <div style={styles.emptyState}><ClipboardListIcon size={30} color="#8A8A82" strokeWidth={1.6} /><p style={styles.emptyText}>Noch kein Bestand eingetragen.</p></div>
+          ) : (
+            <div style={styles.categoryMenu}>
+              {bestandKategorienVorhanden.map((k) => (
+                <button key={k} onClick={() => setBestandKategorie(k)} style={styles.categoryMenuItem}>
+                  <span>{k}</span><span style={styles.categoryMenuCount}>{bestandCountFuer(k)}</span>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+
+        {filter === "bestand" && bestandKategorie !== null && (
+          <div style={styles.categoryBackRow}>
+            <button onClick={() => setBestandKategorie(null)} style={styles.backButton}>← Kategorien</button>
+            <span style={styles.categoryBackLabel}>{bestandKategorie}</span>
+          </div>
+        )}
+
+        {loaded && filter !== "bestand" && visibleItems.length === 0 && (
+          <div style={styles.emptyState}><ClipboardListIcon size={30} color="#8A8A82" strokeWidth={1.6} /><p style={styles.emptyText}>{filter === "offen" ? "Keine offenen Bestellungen." : "Keine Einträge."}</p></div>
+        )}
+
+        {(filter !== "bestand" || bestandKategorie !== null) && <ul style={styles.list}>{visibleItems.map(renderItem)}</ul>}
+
+        {saveError && <p style={styles.saveError}>Speichern ist gerade nicht möglich — Änderungen bleiben nur in dieser Sitzung erhalten.</p>}
+      </main>
+
+      {showSettings && (
+        <SettingsPanel
+          apiKey={apiKey}
+          firebaseConfigStr={firebaseConfigStr}
+          firestoreVerbunden={firestoreVerbunden}
+          onSave={saveSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------- Styles ---------- */
+const RED = "#D9291F", BLUE = "#2E9AD1", INK = "#1A1A18", PAPER = "#F4F1EC", STEEL = "#3B3F44", LINE = "#DCD8CC";
+
+const styles = {
+  page: { minHeight: "100vh", background: PAPER, fontFamily: "'JetBrains Mono','IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace", color: INK, paddingBottom: 40 },
+  hazardStrip: { height: 6, width: "100%", backgroundImage: `linear-gradient(90deg, ${BLUE}, ${RED})` },
+  header: { backgroundImage: `linear-gradient(135deg, ${BLUE}, ${RED})`, padding: "18px 20px 22px" },
+  headerRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  logoBlock: { display: "flex", alignItems: "center", gap: 10 },
+  title: { margin: 0, fontSize: 19, letterSpacing: "0.06em", color: "#fff", fontWeight: 800 },
+  subtitle: { margin: 0, fontSize: 11, color: "rgba(255,255,255,0.85)", letterSpacing: "0.03em" },
+  settingsButton: { position: "relative", background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 6, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
+  syncDot: { position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: "50%", border: "1.5px solid " + STEEL },
+  countBadge: { background: "#fff", borderRadius: 4, padding: "6px 12px", display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1, minWidth: 50 },
+  countNumber: { fontSize: 20, fontWeight: 800, color: RED },
+  countLabel: { fontSize: 9, color: INK, letterSpacing: "0.05em" },
+  main: { maxWidth: 640, margin: "0 auto", padding: "18px 16px 0" },
+  installBanner: { marginBottom: 14 },
+  installButton: { width: "100%", background: "#fff", border: `1.5px solid ${BLUE}`, color: BLUE, borderRadius: 6, padding: "10px 14px", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer" },
+  installHint: { fontSize: 12, color: STEEL, textAlign: "center", marginTop: 6 },
+  addButtonRow: { display: "flex", gap: 8 },
+  captureButton: { flex: 2, background: RED, color: "#fff", border: "none", borderRadius: 6, padding: "16px 18px", fontSize: 14, fontWeight: 700, letterSpacing: "0.02em", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer" },
+  manualButton: { flex: 1, background: "transparent", color: BLUE, border: `2px solid ${BLUE}`, borderRadius: 6, padding: "16px 12px", fontSize: 14, fontWeight: 700, letterSpacing: "0.02em", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer" },
+  captureCard: { background: "#fff", border: `2px solid ${BLUE}`, borderRadius: 8, overflow: "hidden" },
+  captureCardInner: { display: "flex", flexDirection: "column" },
+  photoPreview: { width: "100%", maxHeight: 180, objectFit: "cover", display: "block" },
+  captureFields: { padding: 14, display: "flex", flexDirection: "column", gap: 8 },
+  analyzingRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: STEEL, padding: "10px 0" },
+  spinIcon: { color: INK },
+  apiErrorText: { fontSize: 12, color: RED, margin: 0 },
+  fieldLabel: { fontSize: 10, letterSpacing: "0.05em", color: "#7A7A70", textTransform: "uppercase" },
+  textInput: { width: "100%", boxSizing: "border-box", border: `1.5px solid ${LINE}`, borderRadius: 4, padding: "8px 10px", fontSize: 14, fontFamily: "inherit", background: "#fff", color: INK },
+  fieldRow: { display: "flex", gap: 10 },
+  captureActions: { display: "flex", gap: 8, marginTop: 4 },
+  ghostButton: { flex: 1, background: "transparent", border: `1.5px solid ${LINE}`, borderRadius: 4, padding: "9px 12px", fontSize: 13, fontWeight: 600, color: STEEL, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer" },
+  primaryButton: { flex: 2, background: RED, border: `1.5px solid ${RED}`, borderRadius: 4, padding: "9px 12px", fontSize: 13, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer" },
+  filterRow: { display: "flex", gap: 6, marginTop: 20, marginBottom: 12, flexWrap: "wrap" },
+  filterButton: { background: "transparent", border: `1.5px solid ${LINE}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600, color: STEEL, cursor: "pointer", whiteSpace: "nowrap" },
+  filterButtonActive: { background: BLUE, color: "#fff", borderColor: BLUE },
+  searchRow: { display: "flex", gap: 8, marginBottom: 10 },
+  searchBox: { flex: 1, display: "flex", alignItems: "center", gap: 8, background: "#fff", border: `1.5px solid ${LINE}`, borderRadius: 6, padding: "8px 12px" },
+  searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, fontFamily: "inherit", color: INK },
+  exportButton: { background: "#fff", border: `1.5px solid ${LINE}`, borderRadius: 6, padding: "0 14px", color: STEEL, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  bulkRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" },
+  bulkToggleButton: { background: "transparent", border: `1.5px solid ${STEEL}`, color: STEEL, borderRadius: 20, padding: "5px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  bulkConfirmButton: { background: RED, border: `1.5px solid ${RED}`, color: "#fff", borderRadius: 20, padding: "5px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 },
+  selectBox: { width: 24, height: 24, minWidth: 24, background: "transparent", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginTop: 2 },
+  categoryMenu: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 },
+  categoryMenuItem: { background: "#fff", border: `1.5px solid ${LINE}`, borderRadius: 6, padding: "13px 14px", fontSize: 14, fontWeight: 700, color: INK, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", textAlign: "left" },
+  categoryMenuCount: { background: "#F0EEE5", borderRadius: 12, padding: "2px 9px", fontSize: 12, fontWeight: 700, color: STEEL },
+  categoryBackRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 },
+  backButton: { background: "transparent", border: `1.5px solid ${BLUE}`, color: BLUE, borderRadius: 20, padding: "5px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+  categoryBackLabel: { fontSize: 13, fontWeight: 800, color: INK, letterSpacing: "0.02em" },
+  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "40px 0" },
+  emptyText: { color: "#8A8A82", fontSize: 13 },
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 },
+  itemCard: { background: "#fff", border: `1.5px solid ${LINE}`, borderRadius: 6, padding: 10 },
+  itemMain: { display: "flex", alignItems: "flex-start", gap: 10 },
+  checkCircle: { width: 24, height: 24, minWidth: 24, borderRadius: "50%", border: `2px solid ${INK}`, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginTop: 2 },
+  checkCircleDone: { background: RED, borderColor: RED },
+  itemBody: { flex: 1, minWidth: 0 },
+  itemName: { fontSize: 14, fontWeight: 600, color: INK, padding: "2px 0" },
+  itemNameRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 },
+  nachbestellenBadge: { display: "inline-flex", alignItems: "center", gap: 3, background: "#FBEAE9", color: RED, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: "2px 7px", letterSpacing: "0.02em" },
+  strikethrough: { textDecoration: "line-through", color: "#9A9A90" },
+  itemMeta: { display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#7A7A70", marginTop: 4, flexWrap: "wrap" },
+  tagChip: { background: "#F0EEE5", border: `1px solid ${LINE}`, borderRadius: 4, padding: "2px 6px", fontSize: 10, letterSpacing: "0.02em" },
+  metaSep: { color: "#C7C4B6" },
+  itemThumb: { width: 44, height: 44, objectFit: "cover", borderRadius: 4, border: `1px solid ${LINE}` },
+  editButton: { background: "transparent", border: "none", color: STEEL, cursor: "pointer", padding: 4, marginTop: 2 },
+  deleteButton: { background: "transparent", border: "none", color: "#B0473F", cursor: "pointer", padding: 4, marginTop: 2 },
+  saveError: { fontSize: 11, color: "#B0473F", marginTop: 10, textAlign: "center" },
+  modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 },
+  modalCard: { background: "#fff", borderRadius: 10, padding: 20, maxWidth: 420, width: "100%", display: "flex", flexDirection: "column", gap: 10 },
+  modalTitle: { margin: 0, fontSize: 16, fontWeight: 800, color: INK },
+  modalText: { margin: 0, fontSize: 12.5, color: STEEL, lineHeight: 1.5 },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Bestellliste />);
+</script>
+</body>
+</html>
