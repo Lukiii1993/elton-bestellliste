@@ -30,7 +30,23 @@
 
   <script>
     const statusEl = document.getElementById('status');
-    document.getElementById('refresh').addEventListener('click', () => location.reload(true));
+    document.getElementById('refresh').addEventListener('click', async () => {
+      // try to unregister service workers and clear caches, then reload
+      try{
+        if(navigator.serviceWorker){
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for(const r of regs) await r.unregister();
+        }
+      }catch(e){ console.warn('sw-unregister', e); }
+
+      try{
+        const keys = await caches.keys();
+        for(const k of keys) await caches.delete(k);
+      }catch(e){ console.warn('cache-clear', e); }
+
+      // force-reload
+      location.reload(true);
+    });
 
     async function registerSW(){
       if('serviceWorker' in navigator){
