@@ -1,67 +1,102 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Elton GmbH – Bestellliste</title>
-  <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#D9291F">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F4F1EC;margin:0}
-    .card{background:white;border-radius:10px;padding:20px;box-shadow:0 6px 20px rgba(0,0,0,.08);max-width:720px;width:100%;text-align:center}
-    h1{margin:0 0 8px;font-size:20px}
-    p{margin:0 0 12px;color:#333}
-    small{color:#666}
-    .status{margin-top:12px}
-    button{background:#D9291F;color:#fff;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Elton GmbH – Bestellliste</title>
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#D9291F" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Bestellliste" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  ::placeholder { color: #A6A69C; }
+  @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+  .spin { animation: spin 0.9s linear infinite; }
+  input:focus, select:focus, button:focus-visible {
+    outline: 2px solid #1A1A18;
+    outline-offset: 2px;
+  }
+</style>
 </head>
 <body>
-  <div class="card">
-    <h1>Elton GmbH – Bestellliste</h1>
-    <p>Minimaler Platzhalter — die Seite wurde repariert und lädt jetzt. Wenn du die vollständige App zurückhaben möchtest, sag mir Bescheid und ich stelle sie wieder her oder behebe gezielt die Fehler.</p>
-    <div class="status" id="status">Status: Initialisiere…</div>
-    <div style="margin-top:12px">
-      <button id="refresh">Hard‑Refresh</button>
-    </div>
-    <p style="margin-top:14px"><small>Wenn du die originale App möchtest: ich kann die vollständige Anwendung Schritt für Schritt wiederherstellen.</small></p>
-  </div>
+<div id="root"></div>
 
-  <script>
-    const statusEl = document.getElementById('status');
-    document.getElementById('refresh').addEventListener('click', async () => {
-      // try to unregister service workers and clear caches, then reload
-      try{
-        if(navigator.serviceWorker){
-          const regs = await navigator.serviceWorker.getRegistrations();
-          for(const r of regs) await r.unregister();
-        }
-      }catch(e){ console.warn('sw-unregister', e); }
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
-      try{
-        const keys = await caches.keys();
-        for(const k of keys) await caches.delete(k);
-      }catch(e){ console.warn('cache-clear', e); }
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-      // force-reload
-      location.reload(true);
-    });
+/* ---------- Icons (einfache Inline-SVGs, ersetzen lucide-react) ---------- */
+function Icon({ children, size = 18, color = "currentColor", strokeWidth = 2, style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      {children}
+    </svg>
+  );
+}
+const CameraIcon = (p) => <Icon {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Icon>;
+const PlusIcon = (p) => <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>;
+const Trash2Icon = (p) => <Icon {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></Icon>;
+const CheckIcon = (p) => <Icon {...p}><path d="M20 6 9 17l-5-5"/></Icon>;
+const XIcon = (p) => <Icon {...p}><path d="M18 6 6 18M6 6l12 12"/></Icon>;
+const Loader2Icon = (p) => <Icon {...p}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
+const PackageIcon = (p) => <Icon {...p}><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></Icon>;
+const ClipboardListIcon = (p) => <Icon {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h6"/></Icon>;
+const Edit3Icon = (p) => <Icon {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></Icon>;
+const SearchIcon = (p) => <Icon {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Icon>;
+const DownloadIcon = (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></Icon>;
+const AlertTriangleIcon = (p) => <Icon {...p}><path d="m21.7 18-8-14.3a2 2 0 0 0-3.4 0L2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4M12 17h.01"/></Icon>;
+const CheckSquareIcon = (p) => <Icon {...p}><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></Icon>;
+const SquareIcon = (p) => <Icon {...p}><rect x="3" y="3" width="18" height="18" rx="2"/></Icon>;
+const SettingsIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51"/></Icon>;
+const SmartphoneIcon = (p) => <Icon {...p}><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></Icon>;
+const ShareIcon = (p) => <Icon {...p}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4M12 2v13"/></Icon>;
 
-    async function registerSW(){
-      if('serviceWorker' in navigator){
-        try{
-          const reg = await navigator.serviceWorker.register('./sw.js');
-          statusEl.textContent = 'Service Worker registriert (Scope: ' + reg.scope + ')';
-        }catch(e){
-          statusEl.textContent = 'Service Worker Registrierung fehlgeschlagen: ' + e.message;
-        }
-      } else {
-        statusEl.textContent = 'Service Worker nicht unterstützt in diesem Browser.';
-      }
-    }
-    // small delay so the page renders before heavy tasks
-    setTimeout(registerSW, 300);
-  </script>
-</body>
-</html>
+/* ---------- Helpers ---------- */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function hashBase64(base64) {
+  const enc = new TextEncoder().encode(base64);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const FOTOCACHE_KEY = "elton-bestellliste-fotocache";
+
+function ladeFotoCache() {
+  try { return JSON.parse(localStorage.getItem(FOTOCACHE_KEY) || "{}"); } catch (e) { return {}; }
+}
+function speichereFotoCache(cache) {
+  try {
+    const eintraege = Object.entries(cache);
+    // Cache auf die letzten 200 Fotos begrenzen, damit der Speicher nicht ausufert
+    const begrenzt = Object.fromEntries(eintraege.slice(-200));
+    localStorage.setItem(FOTOCACHE_KEY, JSON.stringify(begrenzt));
+  } catch (e) {}
+}
+
+async function identifyMaterial(base64, mediaType, apiKey) {
+  const hash = await hashBase64(base64);
+  const cache = ladeFotoCache();
+  if (cache[hash]) {
+    return { ...cache[hash], ausCache: true };
+  }
+
