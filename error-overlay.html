@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Elton Debug — Error Overlay</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:#f7f7f8;color:#111}
+    header{background:#D9291F;color:white;padding:12px 16px}
+    .container{padding:14px}
+    pre{background:#111;color:#fff;padding:12px;border-radius:8px;max-height:50vh;overflow:auto}
+    button{background:#2E9AD1;color:white;border:none;padding:8px 12px;border-radius:8px;margin-right:8px}
+    .danger{background:#D9291F}
+    .small{font-size:13px;color:#555}
+    a.link{color:#2E9AD1}
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Elton Debug — Error Overlay</strong>
+  </header>
+  <div class="container">
+    <p>Diese Seite fängt JavaScript‑Fehler ab und zeigt sie an. Wenn hier Meldungen erscheinen, kopiere sie bitte und sende sie mir.</p>
+
+    <div style="margin-bottom:12px">
+      <button id="showLog">Fehler anzeigen</button>
+      <button id="clearAndReload" class="danger">Unregister SW + Clear Caches & Reload</button>
+      <button id="reloadApp">Reload App (normal)</button>
+    </div>
+
+    <p class="small">Links: <a class="link" href="./">App (root)</a> · <a class="link" href="/index.html">index.html (raw)</a> · <a class="link" href="/sw.js">sw.js (raw)</a></p>
+
+    <h3>Fehler‑Log</h3>
+    <pre id="log">(keine Fehler erfasst)</pre>
+
+    <h3>Anweisungen</h3>
+    <ol>
+      <li>Falls du hier Fehler siehst: kopiere den Text und schicke ihn mir.</li>
+      <li>Falls nichts angezeigt wird: Drücke "Unregister SW + Clear Caches & Reload" — die Seite versucht dann alle Service Worker, Caches und IndexedDB zu löschen und lädt die App neu.</li>
+      <li>Wenn das auch nicht hilft: sag mir, ich pushe weitergehende Debug‑Änderungen.</li>
+    </ol>
+  </div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    function append(msg){
+      const now = new Date().toISOString();
+      if(logEl.textContent === '(keine Fehler erfasst)') logEl.textContent = '';
+      logEl.textContent += now + " — " + msg + "\n\n";
+    }
+
+    window.onerror = function(message, source, lineno, colno, error){
+      append('onerror: ' + String(message) + ' @ ' + (source || '') + ':' + (lineno||'') + ':' + (colno||'' ) + (error && error.stack ? '\n' + error.stack : ''));
+      return false;
+    };
+
+    window.addEventListener('unhandledrejection', function(ev){
+      const reason = ev.reason && (ev.reason.stack || ev.reason.message || JSON.stringify(ev.reason)) || String(ev.reason);
+      append('unhandledrejection: ' + reason);
+    });
+
+    document.getElementById('showLog').addEventListener('click', ()=>{
+      alert(logEl.textContent || '(keine Fehler)');
+    });
+
+    document.getElementById('reloadApp').addEventListener('click', ()=>{
+      location.href = './';
+    });
+
+    document.getElementById('clearAndReload').addEventListener('click', async ()=>{
+      try{
+        append('Starte Cleanup: unregistering SWs...');
+        if(navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for(const r of regs){ try{ await r.unregister(); append('unregistered: ' + (r.scope || 'unknown scope')); }catch(e){ append('unregister failed: ' + e.message || e); } }
+        } else append('navigator.serviceWorker not available');
+      }catch(e){ append('sw unregister error: ' + e.message); }
+
+      try{
+        append('Lösche caches...');
+        if(window.caches && caches.keys){
+          const keys = await caches.keys();
+          for(const k of keys){ try{ await caches.delete(k); append('deleted cache: ' + k); }catch(e){ append('cache delete failed: ' + k + ' ' + (e.message||e)); } }
+        } else append('caches API not available');
+      }catch(e){ append('caches error: ' + e.message); }
+
+      try{ localStorage.clear(); append('localStorage cleared'); }catch(e){ append('localStorage clear failed: ' + e.message); }
+
+      try{
+        append('Lösche IndexedDB...');
+        if(indexedDB && indexedDB.databases){
+          const dbs = await indexedDB.databases();
+          for(const db of dbs){ if(db && db.name){ try{ indexedDB.deleteDatabase(db.name); append('deleted idb: ' + db.name); }catch(e){ append('idb delete failed: ' + db.name + ' ' + (e.message||e)); } } }
+        } else append('indexedDB.databases() not supported');
+      }catch(e){ append('indexedDB error: ' + e.message); }
+
+      append('Cleanup fertig — neu laden...');
+      // force reload from network
+      const url = new URL(location.href);
+      url.searchParams.set('sw_cleared','1');
+      location.replace(url.toString());
+    });
+
+    // small heartbeat so iOS doesn't time out before showing
+    append('Debug overlay geladen. Warte auf Fehler...');
+  </script>
+</body>
+</html>
