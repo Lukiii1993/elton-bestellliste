@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Elton GmbH – Bestellliste (Vollversion)</title>
+  <meta name="theme-color" content="#D9291F">
+  <style>
+    :root{--bg:#F4F1EC;--card:#fff;--accent:#D9291F;--muted:#666}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:#111}
+    .wrap{max-width:900px;margin:18px auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between}
+    h1{margin:0;font-size:20px}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+    .form{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    input[type=text], input[type=number], select{padding:10px;border-radius:8px;border:1px solid #e6e4df;min-width:0}
+    button{background:var(--accent);color:#fff;border:0;padding:10px 12px;border-radius:8px}
+    .ghost{background:#eee;color:#111}
+    ul{list-style:none;padding:0;margin:12px 0}
+    li{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;border:1px solid #f0efe9;margin-bottom:8px;background:#fff}
+    .meta{color:var(--muted);font-size:13px}
+    .controls{display:flex;gap:8px}
+    .small{font-size:13px;color:var(--muted)}
+    footer{margin-top:14px;text-align:center;color:var(--muted);font-size:13px}
+    @media (max-width:420px){ .form{flex-direction:column} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Elton GmbH – Bestellliste</h1>
+      <div><button id="exportBtn" class="ghost">Export</button></div>
+    </header>
+
+    <div class="card" id="app">
+      <div>
+        <div class="form">
+          <input id="name" type="text" placeholder="Artikelname (z. B. Schraube M6)" />
+          <input id="qty" type="number" placeholder="Menge" min="1" value="1" style="width:96px" />
+          <select id="unit" style="width:130px">
+            <option>Stück</option>
+            <option>Gebinde</option>
+          </select>
+          <select id="category" style="width:160px">
+            <option>Schrauben</option>
+            <option>Werkzeug</option>
+            <option>Kleber</option>
+            <option>Verbrauchsmaterial</option>
+            <option>Sonstiges</option>
+          </select>
+          <button id="add">Hinzufügen</button>
+        </div>
+        <p class="small" style="margin-top:8px">Tipp: benutze kurznamen und Mengen; Einträge werden lokal auf diesem Gerät gespeichert.</p>
+      </div>
+
+      <hr style="margin:12px 0;border:0;border-top:1px solid #f0efe9" />
+
+      <div>
+        <strong>Bestellliste</strong>
+        <ul id="list"></ul>
+        <div style="display:flex;gap:8px">
+          <button id="clearAll" class="ghost">Alle löschen</button>
+          <button id="importBtn" class="ghost">Import</button>
+          <button id="syncNote" class="ghost">Sync: lokal</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Diese Vollversion ist vorgebaut und benötigt keine Transpilierung im Browser — stabiler auf iPhone Safari.</p>
+    </footer>
+  </div>
+
+  <script>
+    // Simple localStorage-backed list app
+    const STORAGE_KEY = 'elton_bestellliste_v1';
+    const nameEl = document.getElementById('name');
+    const qtyEl = document.getElementById('qty');
+    const unitEl = document.getElementById('unit');
+    const catEl = document.getElementById('category');
+    const addBtn = document.getElementById('add');
+    const listEl = document.getElementById('list');
+    const clearBtn = document.getElementById('clearAll');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+
+    function load(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      }catch(e){ console.warn('load error',e); return []; }
+    }
+    function save(items){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }catch(e){ console.warn('save error', e); }
+    }
+    function uid(){ return Date.now().toString(36); }
+
+    function render(){
+      const items = load();
+      listEl.innerHTML = '';
+      if(items.length === 0){
+        const li = document.createElement('li'); li.textContent = 'Keine Einträge'; li.style.justifyContent='center'; listEl.appendChild(li); return;
+      }
+      items.forEach(it => {
+        const li = document.createElement('li');
+        const left = document.createElement('div');
+        left.style.display='flex'; left.style.flexDirection='column';
+        const title = document.createElement('div'); title.textContent = it.name + ' — ' + it.qty + ' ' + it.unit; title.style.fontWeight='600';
+        const meta = document.createElement('div'); meta.textContent = it.category + (it.note ? ' · ' + it.note : ''); meta.className='meta';
+        left.appendChild(title); left.appendChild(meta);
+        li.appendChild(left);
+
+        const controls = document.createElement('div'); controls.className='controls';
+        const done = document.createElement('button'); done.textContent='✓'; done.title='Als bestellt markieren'; done.onclick = ()=>{ toggleDone(it.id); };
+        const edit = document.createElement('button'); edit.textContent='✎'; edit.title='Bearbeiten'; edit.onclick = ()=>{ editItem(it.id); };
+        const del = document.createElement('button'); del.textContent='🗑'; del.title='Löschen'; del.onclick = ()=>{ removeItem(it.id); };
+        controls.appendChild(done); controls.appendChild(edit); controls.appendChild(del);
+        li.appendChild(controls);
+
+        if(it.done){ li.style.opacity = '0.6'; }
+        listEl.appendChild(li);
+      });
+    }
+
+    function addItem(){
+      const name = nameEl.value.trim();
+      if(!name) return alert('Bitte Artikelname eingeben');
+      const qty = parseInt(qtyEl.value,10) || 1;
+      const unit = unitEl.value;
+      const category = catEl.value;
+      const items = load();
+      items.unshift({ id: uid(), name, qty, unit, category, done:false, created: Date.now() });
+      save(items); render();
+      nameEl.value=''; qtyEl.value='1'; nameEl.focus();
+    }
+
+    function removeItem(id){
+      let items = load(); items = items.filter(i=>i.id!==id); save(items); render();
+    }
+    function toggleDone(id){
+      const items = load(); const it = items.find(i=>i.id===id); if(!it) return; it.done = !it.done; save(items); render();
+    }
+    function editItem(id){
+      const items = load(); const it = items.find(i=>i.id===id); if(!it) return; const newName = prompt('Bearbeite Artikelname', it.name); if(newName===null) return; it.name = newName.trim() || it.name; save(items); render();
+    }
+    function clearAll(){ if(!confirm('Alle Einträge wirklich löschen?')) return; localStorage.removeItem(STORAGE_KEY); render(); }
+
+    function exportJson(){ const items = load(); const data = JSON.stringify(items); const blob = new Blob([data],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='bestellliste-export.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+    function importJson(){
+      const inp = document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.onchange = e => {
+        const f = e.target.files && e.target.files[0]; if(!f) return; const reader = new FileReader(); reader.onload = ()=>{
+          try{ const parsed = JSON.parse(reader.result); if(!Array.isArray(parsed)) throw new Error('Ungültiges Format'); save(parsed); render(); alert('Import erfolgreich'); }catch(err){ alert('Import fehlgeschlagen: ' + (err.message||err)); }
+        }; reader.readAsText(f);
+      }; inp.click();
+    }
+
+    // wire up
+    addBtn.addEventListener('click', addItem);
+    clearBtn.addEventListener('click', clearAll);
+    exportBtn.addEventListener('click', exportJson);
+    importBtn.addEventListener('click', importJson);
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && document.activeElement===nameEl) addItem(); });
+
+    // initial render
+    render();
+
+    // lightweight notice for old service workers: try to unregister once
+    (async function tryUnregister(){
+      try{
+        if(navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for(const r of regs) await r.unregister();
+        }
+      }catch(e){/* ignore */}
+    })();
+  </script>
+</body>
+</html>
