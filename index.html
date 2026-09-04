@@ -34,6 +34,28 @@
       // open the full index in a new navigation to avoid service worker interference
       window.location.href = '/index.full.html';
     });
+
+    // Best-effort cleanup for old ServiceWorkers and caches to avoid white/404 screens
+    (async function cleanupOldServiceWorkersAndCaches(){
+      try{
+        if('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations){
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for(const r of regs){
+            try{ await r.unregister(); }catch(e){}
+          }
+        }
+      }catch(e){}
+      try{
+        if(window.caches && caches.keys){
+          const keys = await caches.keys();
+          for(const k of keys){
+            try{ await caches.delete(k); }catch(e){}
+          }
+        }
+      }catch(e){}
+      // leave the page as-is; users can reload manually if needed
+      console.log('Cleanup: attempted to unregister service workers and clear caches');
+    })();
   </script>
 </body>
 </html>
