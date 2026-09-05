@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Elton GmbH – Bestellliste (Vollversion)</title>
   <meta name="theme-color" content="#D9291F">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <style>
     :root{--bg:#F4F1EC;--card:#fff;--accent:#D9291F;--muted:#666;--pill:#eee}
     *{box-sizing:border-box}
@@ -15,7 +18,7 @@
     .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
     .form{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     input[type=text], input[type=number], select{padding:12px;border-radius:10px;border:1px solid #e6e4df;min-width:0}
-    button{background:var(--accent);color:#fff;border:0;padding:10px 14px;border-radius:10px;font-weight:600}
+    button{background:var(--accent);color:#fff;border:0;padding:10px 14px;border-radius:12px;font-weight:600}
     .ghost{background:var(--pill);color:#111;padding:10px;border-radius:10px;border:0}
     ul{list-style:none;padding:0;margin:12px 0}
     li{display:flex;align-items:center;justify-content:space-between;padding:12px;border-radius:10px;border:1px solid #f0efe9;margin-bottom:8px;background:#fff}
@@ -123,10 +126,10 @@
     // Elements
     const nameEl = $('name'), qtyEl = $('qty'), unitEl = $('unit'), catEl = $('category');
     const addBtn = $('add'), listEl = $('list'), clearBtn = $('clearAll');
-    const exportBtn = $('exportBtn'), importBtn = $('importBtn'), resetBtn = $('resetData');
-    const modal = $('modal'), openSettings = $('openSettings'), closeModal = $('closeModal'), saveSettings = $('saveSettings');
-    const firebaseConfigEl = $('firebaseConfig'), anthropicKeyEl = $('anthropicKey');
-    const syncStatusEl = $('syncStatus');
+    const exportBtn = $('exportBtn'), importBtn = $('importBtn'), resetBtn = ('resetData');
+    const modal = ('modal'), openSettings = ('openSettings'), closeModal = ('closeModal'), saveSettings = ('saveSettings');
+    const firebaseConfigEl = ('firebaseConfig'), anthropicKeyEl = ('anthropicKey');
+    const syncStatusEl = ('syncStatus');
 
     // Data helpers
     function load(){ try{ const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; }catch(e){ console.warn('load error', e); return []; } }
@@ -153,7 +156,7 @@
 
     // Export / Import
     function exportJson(){ const items=load(); const data=JSON.stringify(items); const blob=new Blob([data],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='bestellliste-export.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); toast('Export gestartet'); }
-    function importJson(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=()=>{ try{ const parsed=JSON.parse(reader.result); if(!Array.isArray(parsed)) throw new Error('Ungültiges Format'); save(parsed); render(); toast('Import erfolgreich'); }catch(err){ alert('Import fehlgeschlagen: '+(err.message||err)); } }; reader.readAsText(f); }; inp.click(); }
+    function importJson(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=()=>{ try{ const parsed=JSON.parse(reader.result); if(!Array.isArray(parsed)) throw new Error('Ungültiges Format'); save(parsed); render(); toast('Import erfolgreich'); }catch(err){ alert('Import fehlgeschlagen: ' + (err.message||err)); } }; reader.readAsText(f); }; inp.click(); }
 
     // Settings modal
     openSettings.addEventListener('click', ()=>{ firebaseConfigEl.value = localStorage.getItem(FIREBASE_KEY) || ''; anthropicKeyEl.value = localStorage.getItem(ANTHROPIC_KEY) || ''; modal.style.display='flex'; });
