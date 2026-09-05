@@ -7,7 +7,11 @@
   <meta name="theme-color" content="#D9291F">
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-180.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
+  <link rel="mask-icon" href="/icons/icon.svg" color="#D9291F">
   <style>
     :root{--bg:#F4F1EC;--card:#fff;--accent:#D9291F;--muted:#666;--pill:#eee;--primary:#2E9AD1}
     *{box-sizing:border-box}
@@ -101,25 +105,6 @@
     </footer>
   </div>
 
-  <!-- Settings Modal -->
-  <div id="modal" class="modal-backdrop" role="dialog" aria-modal="true">
-    <div class="modal" role="document">
-      <h2>Einstellungen</h2>
-      <div class="field">
-        <label for="firebaseConfig">Firebase-Konfiguration (JSON)</label>
-        <textarea id="firebaseConfig" placeholder='{"apiKey": "...", "projectId": "..."}'></textarea>
-      </div>
-      <div class="field">
-        <label for="anthropicKey">Anthropic API Key (optional)</label>
-        <input id="anthropicKey" type="password" placeholder="sk-ant-..." style="width:100%;padding:10px;border-radius:8px;border:1px solid #eee" />
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button id="closeModal" class="ghost">Schließen</button>
-        <button id="saveSettings" class="primary">Speichern</button>
-      </div>
-    </div>
-  </div>
-
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
@@ -135,10 +120,10 @@
     // Elements
     const nameEl = $('name'), qtyEl = $('qty'), unitEl = $('unit'), catEl = $('category');
     const addBtn = $('add'), listEl = $('list'), clearBtn = $('clearAll');
-    const exportBtn = $('exportBtn'), importBtn = $('importBtn'), resetBtn = $('resetData');
-    const modal = $('modal'), openSettings = $('openSettings'), closeModal = $('closeModal'), saveSettings = $('saveSettings');
-    const firebaseConfigEl = $('firebaseConfig'), anthropicKeyEl = $('anthropicKey');
-    const syncStatusEl = $('syncStatus');
+    const exportBtn = $('exportBtn'), importBtn = ('importBtn'), resetBtn = ('resetData');
+    const modal = ('modal'), openSettings = ('openSettings'), closeModal = ('closeModal'), saveSettings = ('saveSettings');
+    const firebaseConfigEl = ('firebaseConfig'), anthropicKeyEl = ('anthropicKey');
+    const syncStatusEl = ('syncStatus');
 
     // Data helpers
     function load(){ try{ const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; }catch(e){ console.warn('load error', e); return []; } }
