@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <style>
-    :root{--bg:#F4F1EC;--card:#fff;--accent:#D9291F;--muted:#666;--pill:#eee}
+    :root{--bg:#F4F1EC;--card:#fff;--accent:#D9291F;--muted:#666;--pill:#eee;--primary:#2E9AD1}
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:#111}
     .wrap{max-width:900px;margin:18px auto;padding:16px}
@@ -24,9 +24,18 @@
     li{display:flex;align-items:center;justify-content:space-between;padding:12px;border-radius:10px;border:1px solid #f0efe9;margin-bottom:8px;background:#fff}
     .meta{color:var(--muted);font-size:13px}
     .controls{display:flex;gap:8px}
+    .controls button{border:0;background:transparent;padding:8px;border-radius:10px;font-size:15px}
+    .controls button:hover{background:#f3f3f3}
+    .controls .done{background:#E9F8EE;color:#0C8A3A}
+    .controls .edit{background:#FFF7E6;color:#C47D00}
+    .controls .del{background:#FDECEA;color:#B80F0F}
     .small{font-size:13px;color:var(--muted)}
     footer{margin-top:14px;text-align:center;color:var(--muted);font-size:13px}
     .pill{background:#fff;padding:6px 10px;border-radius:999px;border:1px solid #eee}
+
+    /* action buttons */
+    .primary{background:var(--primary);color:#fff;border-radius:14px;padding:12px 18px;box-shadow:0 6px 18px rgba(46,154,209,.12);text-decoration:none;display:inline-block}
+    .danger{background:#D9291F;color:#fff;border-radius:14px;padding:12px 18px}
 
     /* modal */
     .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center}
@@ -49,7 +58,7 @@
       <div style="display:flex;gap:10px;align-items:center">
         <div id="syncStatus" class="pill small">Sync: lokal</div>
         <button id="openSettings" class="ghost" aria-label="Einstellungen">Einstellungen</button>
-        <button id="exportBtn" class="ghost" aria-label="Export">Export</button>
+        <a id="exportBtn" class="primary" href="#" role="button">Export</a>
       </div>
     </header>
 
@@ -69,7 +78,7 @@
             <option>Verbrauchsmaterial</option>
             <option>Sonstiges</option>
           </select>
-          <button id="add">Hinzufügen</button>
+          <button id="add" class="primary">Hinzufügen</button>
         </div>
         <p class="small" style="margin-top:8px">Tipp: benutze Kurznamen und Mengen; Einträge werden lokal auf diesem Gerät gespeichert.</p>
       </div>
@@ -106,7 +115,7 @@
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
         <button id="closeModal" class="ghost">Schließen</button>
-        <button id="saveSettings">Speichern</button>
+        <button id="saveSettings" class="primary">Speichern</button>
       </div>
     </div>
   </div>
@@ -126,10 +135,10 @@
     // Elements
     const nameEl = $('name'), qtyEl = $('qty'), unitEl = $('unit'), catEl = $('category');
     const addBtn = $('add'), listEl = $('list'), clearBtn = $('clearAll');
-    const exportBtn = $('exportBtn'), importBtn = $('importBtn'), resetBtn = ('resetData');
-    const modal = ('modal'), openSettings = ('openSettings'), closeModal = ('closeModal'), saveSettings = ('saveSettings');
-    const firebaseConfigEl = ('firebaseConfig'), anthropicKeyEl = ('anthropicKey');
-    const syncStatusEl = ('syncStatus');
+    const exportBtn = $('exportBtn'), importBtn = $('importBtn'), resetBtn = $('resetData');
+    const modal = $('modal'), openSettings = $('openSettings'), closeModal = $('closeModal'), saveSettings = $('saveSettings');
+    const firebaseConfigEl = $('firebaseConfig'), anthropicKeyEl = $('anthropicKey');
+    const syncStatusEl = $('syncStatus');
 
     // Data helpers
     function load(){ try{ const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; }catch(e){ console.warn('load error', e); return []; } }
@@ -140,9 +149,9 @@
     function render(){ const items = load(); listEl.innerHTML=''; if(items.length===0){ const li=document.createElement('li'); li.textContent='Keine Einträge'; li.style.justifyContent='center'; listEl.appendChild(li); return; }
       items.forEach(it=>{ const li=document.createElement('li'); const left=document.createElement('div'); left.style.display='flex'; left.style.flexDirection='column'; const title=document.createElement('div'); title.textContent = it.name + ' — ' + it.qty + ' ' + it.unit; title.style.fontWeight='700'; const meta=document.createElement('div'); meta.textContent = it.category; meta.className='meta'; left.appendChild(title); left.appendChild(meta); li.appendChild(left);
         const controls=document.createElement('div'); controls.className='controls';
-        const done=document.createElement('button'); done.textContent='✓'; done.title='Als bestellt markieren'; done.onclick=()=>toggleDone(it.id);
-        const edit=document.createElement('button'); edit.textContent='✎'; edit.title='Bearbeiten'; edit.onclick=()=>editItem(it.id);
-        const del=document.createElement('button'); del.textContent='🗑'; del.title='Löschen'; del.onclick=()=>removeItem(it.id);
+        const done=document.createElement('button'); done.textContent='✓'; done.title='Als bestellt markieren'; done.className='done'; done.onclick=()=>toggleDone(it.id);
+        const edit=document.createElement('button'); edit.textContent='✎'; edit.title='Bearbeiten'; edit.className='edit'; edit.onclick=()=>editItem(it.id);
+        const del=document.createElement('button'); del.textContent='🗑'; del.title='Löschen'; del.className='del'; del.onclick=()=>removeItem(it.id);
         controls.appendChild(done); controls.appendChild(edit); controls.appendChild(del); li.appendChild(controls);
         if(it.done) li.style.opacity='0.6'; listEl.appendChild(li);
       }); }
